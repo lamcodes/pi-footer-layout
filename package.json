@@ -5,6 +5,14 @@
   "description": "Pi extension with configurable Footer status layouts.",
   "keywords": ["pi", "pi-package", "pi-extension"],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lamcodes/pi-footer-layout.git"
+  },
+  "homepage": "https://github.com/lamcodes/pi-footer-layout#readme",
+  "bugs": {
+    "url": "https://github.com/lamcodes/pi-footer-layout/issues"
+  },
   "pi": {
     "extensions": ["./index.ts"]
   },

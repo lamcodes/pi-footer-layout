@@ -21,29 +21,33 @@ Pi Coding Agent 的独立 Footer 布局扩展。
 pi install "D:\htmlcode\pi-footer-layout"
 ```
 
-### Git 仓库
+### GitHub 公开仓库
 
-发布到 GitHub 后，用户可以固定 tag 安装：
-
-```bash
-pi install git:github.com/<owner>/pi-footer-layout@v0.1.0
-```
-
-### npm 包
-
-发布到 npm 后，用户可以安装固定版本：
+本项目通过 GitHub 公开仓库分发，不需要 npm。用户可以固定 tag 安装：
 
 ```bash
-pi install npm:pi-footer-layout@0.1.0
+pi install git:github.com/lamcodes/pi-footer-layout@v0.1.0
 ```
 
-团队项目也可以用 `pi install -l ...` 写入项目级 `.pi/settings.json`，让 Pi 在项目启动时自动安装缺失的包。
+团队项目也可以使用项目级安装：
+
+```bash
+pi install -l git:github.com/lamcodes/pi-footer-layout@v0.1.0
+```
+
+这会写入项目的 `.pi/settings.json`，让 Pi 在项目启动时自动安装缺失的包。
+
+升级时安装新的 tag：
+
+```bash
+pi install git:github.com/lamcodes/pi-footer-layout@v0.1.1
+```
 
 安装后重启 Pi。扩展默认关闭，不会改变现有 Footer。
 
 ## 配置
 
-在 `C:\Users\Administrator\.pi\agent\settings.json` 中增加：
+在 `~/.pi/agent/settings.json` 中增加：
 
 ```json
 {
