@@ -8,6 +8,10 @@
   "pi": {
     "extensions": ["./index.ts"]
   },
+  "files": ["README.md", "LICENSE", "index.ts", "src"],
+  "engines": {
+    "node": ">=22.19.0"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test test/footer-layout.test.ts"
