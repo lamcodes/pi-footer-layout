@@ -1,0 +1,14 @@
+node_modules/
+
+# Node/npm output
+coverage/
+*.tgz
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Operating-system files
+.DS_Store
+Thumbs.db
