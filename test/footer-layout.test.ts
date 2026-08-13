@@ -3,10 +3,25 @@ import { test } from "node:test";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import {
   DEFAULT_CONFIG,
+  footerConfigsEqual,
   layoutStatusLines,
   parseFooterLayoutConfig,
   sortStatusEntries,
+  type FooterLayoutConfig,
 } from "../src/footer-layout.ts";
+
+function config(
+  overrides: Partial<FooterLayoutConfig> = {},
+): FooterLayoutConfig {
+  return {
+    enabled: true,
+    mode: "each",
+    statusOrder: ["mcp", "tokenSpeed"],
+    statusGroups: [["mcp", "mcp-auth"]],
+    continuationIndent: 3,
+    ...overrides,
+  };
+}
 
 function layout(
   mode: "each" | "wrap" | "group" | "compact",
@@ -164,5 +179,25 @@ test("配置解析显式启用，并兼容旧 wrapStatuses", () => {
   assert.equal(
     parseFooterLayoutConfig({ enabled: true, mode: "group" }).mode,
     "group",
+  );
+});
+
+test("footerConfigsEqual 只把完全等价的配置视为相同", () => {
+  const base = config();
+  assert.equal(footerConfigsEqual(base, config()), true);
+  assert.equal(footerConfigsEqual(base, undefined), false);
+  assert.equal(footerConfigsEqual(base, config({ enabled: false })), false);
+  assert.equal(footerConfigsEqual(base, config({ mode: "wrap" })), false);
+  assert.equal(
+    footerConfigsEqual(base, config({ statusOrder: ["tokenSpeed", "mcp"] })),
+    false,
+  );
+  assert.equal(
+    footerConfigsEqual(base, config({ statusGroups: [["mcp"]] })),
+    false,
+  );
+  assert.equal(
+    footerConfigsEqual(base, config({ continuationIndent: 4 })),
+    false,
   );
 });

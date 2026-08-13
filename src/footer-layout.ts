@@ -214,6 +214,13 @@ class FooterComponent implements Component {
   private readonly footerData: ReadonlyFooterDataProvider;
   private readonly config: FooterLayoutConfig;
   private readonly tui: TUI;
+  /** 会话用量缓存：记录上次扫描的 entries 快照，避免每次渲染全量求和。 */
+  private usageCache?: {
+    first: unknown;
+    last: unknown;
+    length: number;
+    totals: UsageTotals;
+  };
 
   constructor(
     getContext: () => ExtensionContext | undefined,
@@ -270,7 +277,7 @@ class FooterComponent implements Component {
 
   /** 渲染 token、上下文占用、缓存命中率、成本和模型信息。 */
   private renderStatsLine(context: ExtensionContext, width: number): string[] {
-    const totals = collectUsage(context);
+    const totals = this.getUsageTotals(context);
     const statsParts: string[] = [];
     if (totals.input) statsParts.push(`↑${formatTokens(totals.input)}`);
     if (totals.output) statsParts.push(`↓${formatTokens(totals.output)}`);
@@ -350,6 +357,25 @@ class FooterComponent implements Component {
     const dimStatsLeft = this.theme.fg("dim", statsLeft);
     const remainder = statsLine.slice(statsLeft.length);
     return [fitToWidth(dimStatsLeft + this.theme.fg("dim", remainder), width, "")];
+  }
+
+  /** 缓存会话用量汇总：entries 变化（长度或首尾条目引用不同）时才重算。 */
+  private getUsageTotals(context: ExtensionContext): UsageTotals {
+    const entries = context.sessionManager.getEntries();
+    const cache = this.usageCache;
+    const first = entries[0];
+    const last = entries[entries.length - 1];
+    if (
+      cache &&
+      cache.length === entries.length &&
+      cache.first === first &&
+      cache.last === last
+    ) {
+      return cache.totals;
+    }
+    const totals = collectUsage(context);
+    this.usageCache = { first, last, length: entries.length, totals };
+    return totals;
   }
 }
 
@@ -632,4 +658,33 @@ function cloneConfig(config: Readonly<FooterLayoutConfig>): FooterLayoutConfig {
 /** 深复制分组配置。 */
 function cloneGroups(groups: readonly (readonly string[])[]): string[][] {
   return groups.map((group) => [...group]);
+}
+
+/** 判断两份配置是否完全等价，避免配置未变化时重复安装 Footer。 */
+export function footerConfigsEqual(
+  left: Readonly<FooterLayoutConfig>,
+  right: Readonly<FooterLayoutConfig> | undefined,
+): boolean {
+  if (!right) return false;
+  if (
+    left.enabled !== right.enabled ||
+    left.mode !== right.mode ||
+    left.continuationIndent !== right.continuationIndent ||
+    left.statusOrder.length !== right.statusOrder.length ||
+    left.statusGroups.length !== right.statusGroups.length
+  ) {
+    return false;
+  }
+  for (let index = 0; index < left.statusOrder.length; index++) {
+    if (left.statusOrder[index] !== right.statusOrder[index]) return false;
+  }
+  for (let groupIndex = 0; groupIndex < left.statusGroups.length; groupIndex++) {
+    const leftGroup = left.statusGroups[groupIndex];
+    const rightGroup = right.statusGroups[groupIndex];
+    if (leftGroup.length !== rightGroup.length) return false;
+    for (let index = 0; index < leftGroup.length; index++) {
+      if (leftGroup[index] !== rightGroup[index]) return false;
+    }
+  }
+  return true;
 }

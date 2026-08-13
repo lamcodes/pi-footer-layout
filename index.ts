@@ -15,17 +15,27 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import {
   FooterLayout,
+  footerConfigsEqual,
   parseFooterLayoutConfig,
   type FooterLayoutConfig,
 } from "./src/footer-layout.ts";
+
+/** 面板修改后写盘 debounce 延迟，避免连续按键造成高频文件写入。 */
+const PERSIST_DEBOUNCE_MS = 400;
 
 /** 注册独立 Footer 扩展，并提供 /footer-layout TUI 配置入口。 */
 export default (pi: ExtensionAPI) => {
   const layout = new FooterLayout();
   let persistQueue: Promise<void> = Promise.resolve();
   let footerOwnedByLayout = false;
+  /** 上次安装 Footer 时的配置，用于跳过无变化的重复安装。 */
+  let lastAppliedConfig: FooterLayoutConfig | undefined;
+  let persistTimer: NodeJS.Timeout | undefined;
+  let pendingConfig: FooterLayoutConfig | undefined;
+  /** 最近一次持久化的结果，决定面板关闭时的提示文案。 */
+  let persistResult: "ok" | "error" = "ok";
 
-  /** 根据最新配置安装或恢复 Footer。 */
+  /** 根据最新配置安装或恢复 Footer；配置未变化时跳过重复安装。 */
   const applyFooter = (ctx: ExtensionContext): void => {
     if (!layout.isEnabled()) {
       // 只有本扩展之前接管过 Footer 时才恢复默认，避免干扰其它扩展。
@@ -33,25 +43,62 @@ export default (pi: ExtensionAPI) => {
         ctx.ui.setFooter(undefined);
         footerOwnedByLayout = false;
       }
+      lastAppliedConfig = undefined;
+      return;
+    }
+    const config = layout.getConfig();
+    if (footerOwnedByLayout && footerConfigsEqual(config, lastAppliedConfig)) {
       return;
     }
     ctx.ui.setFooter((tui, theme, footerData) =>
       layout.createComponent(tui, theme, footerData),
     );
     footerOwnedByLayout = true;
+    lastAppliedConfig = config;
   };
 
-  /** 串行写入 settings.json，避免连续按键造成互相覆盖。 */
-  const queuePersist = (
+  /** 将配置真正入队写入 settings.json，串行执行并记录最终结果。 */
+  const writeConfig = (
     config: FooterLayoutConfig,
     ctx: ExtensionContext,
   ): void => {
     persistQueue = persistQueue
       .then(() => persistFooterConfig(config))
+      .then(() => {
+        persistResult = "ok";
+      })
       .catch((error: unknown) => {
+        persistResult = "error";
         const message = error instanceof Error ? error.message : String(error);
         ctx.ui.notify(`Footer 配置保存失败: ${message}`, "error");
       });
+  };
+
+  /** 记录最新配置并 debounce 写盘，连续变更只写最后一次。 */
+  const queuePersist = (
+    config: FooterLayoutConfig,
+    ctx: ExtensionContext,
+  ): void => {
+    pendingConfig = config;
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = setTimeout(() => {
+      persistTimer = undefined;
+      const toPersist = pendingConfig;
+      pendingConfig = undefined;
+      if (toPersist) writeConfig(toPersist, ctx);
+    }, PERSIST_DEBOUNCE_MS);
+  };
+
+  /** 面板关闭时取消挂起定时器、立即写入最后一次配置，并等待队列排空。 */
+  const flushPersist = (ctx: ExtensionContext): Promise<void> => {
+    if (persistTimer) {
+      clearTimeout(persistTimer);
+      persistTimer = undefined;
+      const toPersist = pendingConfig;
+      pendingConfig = undefined;
+      if (toPersist) writeConfig(toPersist, ctx);
+    }
+    return persistQueue;
   };
 
   /** 打开 Footer 的交互式配置面板。 */
@@ -64,6 +111,7 @@ export default (pi: ExtensionAPI) => {
       }
 
       let draft = layout.getConfig();
+      persistResult = "ok";
       await ctx.ui.custom<void>((tui, theme, _keybindings, done) => {
         const items: SettingItem[] = [
           {
@@ -156,13 +204,16 @@ export default (pi: ExtensionAPI) => {
         };
       });
 
-      await persistQueue;
-      ctx.ui.notify("Footer 布局配置已应用", "info");
+      await flushPersist(ctx);
+      if (persistResult === "ok") {
+        ctx.ui.notify("Footer 布局配置已应用", "info");
+      }
     },
   });
 
   pi.on("session_start", async (_event, ctx: ExtensionContext) => {
     footerOwnedByLayout = false;
+    lastAppliedConfig = undefined;
     layout.setContext(ctx);
     await layout.initialize();
     if (layout.isEnabled()) applyFooter(ctx);
