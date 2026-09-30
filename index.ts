@@ -2,6 +2,7 @@ import { getAgentDir, getSettingsListTheme } from "@earendil-works/pi-coding-age
 import type {
   ExtensionAPI,
   ExtensionContext,
+  McpServerConfig,
 } from "@earendil-works/pi-coding-agent";
 import {
   Container,
@@ -13,6 +14,10 @@ import {
 } from "@earendil-works/pi-tui";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import {
+  type ImportPlan,
+  syncClaudeMcpServers,
+} from "./src/claude-mcp-import.ts";
 import {
   FooterLayout,
   footerConfigsEqual,
@@ -217,8 +222,76 @@ export default (pi: ExtensionAPI) => {
     layout.setContext(ctx);
     await layout.initialize();
     if (layout.isEnabled()) applyFooter(ctx);
+    await syncClaudeMcp(pi, ctx);
   });
 };
+
+/** 按配置把 Claude Code 用户级 MCP 导入 pi 内置 mcp.json，并为本会话即时注册生效。 */
+async function syncClaudeMcp(
+  pi: ExtensionAPI,
+  ctx: ExtensionContext,
+): Promise<void> {
+  let enabled = false;
+  try {
+    const settingsPath = join(getAgentDir(), "settings.json");
+    const parsed = JSON.parse(await readSettingsFile(settingsPath)) as unknown;
+    enabled =
+      isRecord(parsed) &&
+      isRecord(parsed.claudeMcpImport) &&
+      parsed.claudeMcpImport.enabled === true;
+  } catch {
+    // 配置读取失败视为未开启，不阻塞 Pi 启动。
+    return;
+  }
+  if (!enabled) return;
+
+  try {
+    const result = await syncClaudeMcpServers(getAgentDir());
+    if (!result) return;
+    for (const server of result.plan.toImport) {
+      // 写文件负责持久化，注册让导入的服务器本会话立即可用，无需重启 Pi。
+      // validateImportedServer 已按 pi 规则校验，这里经 unknown 收窄到具体配置类型。
+      pi.registerMcpServer(
+        server.name,
+        server.config as unknown as McpServerConfig,
+      );
+    }
+    notifyImportResult(ctx, result.plan, result.removed);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    ctx.ui.notify(`Claude Code MCP 导入失败: ${message}`, "error");
+  }
+}
+
+/** 同步结果汇总；无新增、无删除且仅有“已存在”的跳过时保持安静，避免每次启动打扰。 */
+function notifyImportResult(
+  ctx: ExtensionContext,
+  plan: ImportPlan,
+  removed: readonly string[],
+): void {
+  const invalid = plan.skipped.filter((item) => item.reason !== "已存在");
+  if (
+    plan.toImport.length === 0 &&
+    invalid.length === 0 &&
+    removed.length === 0
+  ) {
+    return;
+  }
+
+  const parts: string[] = [];
+  if (plan.toImport.length > 0) {
+    parts.push(`已导入: ${plan.toImport.map((s) => s.name).join(", ")}`);
+  }
+  if (removed.length > 0) {
+    parts.push(`已移除: ${removed.join(", ")}（Claude 中已删除, 下次启动生效）`);
+  }
+  if (invalid.length > 0) {
+    parts.push(
+      `已跳过: ${invalid.map((s) => `${s.name}(${s.reason})`).join(", ")}`,
+    );
+  }
+  ctx.ui.notify(`Claude Code MCP 同步完成. ${parts.join(". ")}.`, "info");
+}
 
 /** 将文本输入解析为去重后的状态 key 列表。 */
 function parseStatusOrder(value: string): string[] {

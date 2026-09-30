@@ -9,7 +9,8 @@ Pi Coding Agent 的独立 Footer 布局扩展。
 - MCP、命令历史、TPS 等状态可以各占一行或按宽度自动换行；
 - 动态读取所有 `ctx.ui.setStatus()` 状态，未来新增状态无需修改本扩展；
 - 不修改 `pi-token-speed`、MCP 或其它状态扩展；
-- 状态内容过长时按终端宽度换行，而不是把整行统一截断。
+- 状态内容过长时按终端宽度换行，而不是把整行统一截断；
+- 可选：把 Claude Code 用户级 MCP 服务器自动导入 pi 内置 MCP 配置（默认关闭）。
 
 ## 安装
 
@@ -26,13 +27,13 @@ pi install "D:\htmlcode\pi-footer-layout"
 本项目通过 GitHub 公开仓库分发，不需要 npm。用户可以固定 tag 安装：
 
 ```bash
-pi install git:github.com/lamcodes/pi-footer-layout@v0.1.1
+pi install git:github.com/lamcodes/pi-footer-layout@v0.2.0
 ```
 
 团队项目也可以使用项目级安装：
 
 ```bash
-pi install -l git:github.com/lamcodes/pi-footer-layout@v0.1.1
+pi install -l git:github.com/lamcodes/pi-footer-layout@v0.2.0
 ```
 
 这会写入项目的 `.pi/settings.json`，让 Pi 在项目启动时自动安装缺失的包。
@@ -40,7 +41,7 @@ pi install -l git:github.com/lamcodes/pi-footer-layout@v0.1.1
 升级时安装新的 tag：
 
 ```bash
-pi install git:github.com/lamcodes/pi-footer-layout@v0.1.2
+pi install git:github.com/lamcodes/pi-footer-layout@v0.2.1
 ```
 
 安装后重启 Pi。扩展默认关闭，不会改变现有 Footer。
@@ -143,6 +144,38 @@ pi install git:github.com/lamcodes/pi-footer-layout@v0.1.2
 
 修改会立即应用，并写入全局 `~/.pi/agent/settings.json`。Pi 内置 `/settings` 没有公开扩展自定义设置项的注册接口，因此这里使用独立的 `/footer-layout` TUI 命令。
 
+## Claude Code MCP 导入
+
+pi 0.99.x 起 MCP 已内置，配置在 `~/.pi/agent/mcp.json`。本扩展可以把 Claude Code 的用户级 MCP（`~/.claude.json` 顶层 `mcpServers`）自动同步进来，Claude Code 里增删服务器都不用再手动操作：
+
+1. 读取 Claude Code 用户级配置；
+2. 新增 pi 中缺失的服务器；pi 里已有的同名配置一律不改动；
+3. 跟随删除：Claude Code 里移除的服务器也会从 pi 移除。只作用于本扩展导入过的条目（记录在 `~/.pi/agent/claude-mcp-import.json`），pi 里手动添加或手动改过的永不触碰；
+4. 新增的服务器写入 `mcp.json` 持久化并在当前会话立即注册生效，无需重启 Pi；移除的服务器下次启动 Pi 后断开；
+5. 不兼容条目（如 legacy SSE）跳过并在通知中说明原因。
+
+默认关闭。在 `~/.pi/agent/settings.json` 中开启：
+
+```json
+{
+  "claudeMcpImport": {
+    "enabled": true
+  }
+}
+```
+
+说明：
+
+- 导入的服务器沿用 pi 默认的 `exposure: codemode`，工具经 codemode 或 `tool_search` 调用；需要直接暴露给模型时在 `/mcp` 面板中调整。
+- 需要登录的 HTTP 服务器导入后需在 `/mcp` 中完成一次 OAuth 登录，凭据不会从 Claude Code 迁移。
+- Claude Code 的 `${VAR:-default}` 环境变量默认值写法 pi 不支持，如导入后连接失败请检查对应 `env`。
+- 同步是镜像语义：在 pi 里用 `/mcp` 移除一个仍存在于 Claude Code 的导入服务器，下次同步会重新导入；只是不想用的话用 `/mcp` 禁用即可。
+- 想保留某个导入的服务器、不跟随 Claude 删除，把它的名字从 `~/.pi/agent/claude-mcp-import.json` 的 `imported` 列表里删掉，之后该服务器完全归你手动管理。
+
 ## 注意
 
 Pi 同时只能使用一个 custom Footer。如果其它扩展也调用 `setFooter()`，后注册的扩展可能覆盖本扩展；使用 `ctx.ui.setStatus()` 的扩展则会被本扩展自动布局。
+
+pi 0.99.x 的内置 MCP 不产生 Footer 状态；上文 `mcp`、`mcp-auth` 状态 key 仅在同时安装旧 MCP 扩展时出现，内置 MCP 的服务器状态用 `/mcp` 查看。
+
+本扩展要求 pi 0.99.0 或更高版本。

@@ -1,9 +1,13 @@
 {
   "name": "pi-footer-layout",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "type": "module",
   "description": "Pi extension with configurable Footer status layouts.",
-  "keywords": ["pi", "pi-package", "pi-extension"],
+  "keywords": [
+    "pi",
+    "pi-package",
+    "pi-extension"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -14,21 +18,30 @@
     "url": "https://github.com/lamcodes/pi-footer-layout/issues"
   },
   "pi": {
-    "extensions": ["./index.ts"]
+    "extensions": [
+      "./index.ts"
+    ]
   },
-  "files": ["README.md", "LICENSE", "index.ts", "src"],
+  "files": [
+    "README.md",
+    "LICENSE",
+    "index.ts",
+    "src"
+  ],
   "engines": {
     "node": ">=22.19.0"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test test/footer-layout.test.ts"
+    "test": "node --experimental-strip-types --test \"test/*.test.ts\""
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.81.1",
-    "@earendil-works/pi-tui": ">=0.81.1"
+    "@earendil-works/pi-coding-agent": ">=0.99.0",
+    "@earendil-works/pi-tui": ">=0.99.0"
   },
   "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.99.1",
+    "@earendil-works/pi-tui": "0.99.1",
     "@types/node": "^26.1.1"
   }
 }
