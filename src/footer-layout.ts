@@ -562,8 +562,32 @@ function getUsageNumber(value: unknown): number {
     : 0;
 }
 
+/** collectUsage 只依赖会话条目列表，用结构化入参便于聚焦测试。 */
+export interface UsageSource {
+  sessionManager: { getEntries(): readonly unknown[] };
+}
+
+/** 取出应计入 Footer 的条目 usage，口径与 Pi 原生 Footer 保持一致。 */
+function getEntryUsage(entry: SessionEntryLike): UsageLike | undefined {
+  if (entry.type === "message") {
+    return entry.message?.role === "assistant" ||
+      entry.message?.role === "toolResult"
+      ? entry.message?.usage
+      : undefined;
+  }
+  // usage 是不参与 LLM 上下文的独立计量条目（如 cache 预热），0.99.x 原生 Footer 已计入。
+  if (
+    entry.type === "usage" ||
+    entry.type === "branch_summary" ||
+    entry.type === "compaction"
+  ) {
+    return entry.usage;
+  }
+  return undefined;
+}
+
 /** 从当前会话汇总默认 Footer 展示的 token 使用量和最新缓存命中率。 */
-function collectUsage(context: ExtensionContext): UsageTotals {
+export function collectUsage(source: UsageSource): UsageTotals {
   const totals: UsageTotals = {
     input: 0,
     output: 0,
@@ -572,16 +596,9 @@ function collectUsage(context: ExtensionContext): UsageTotals {
     cost: 0,
   };
 
-  for (const rawEntry of context.sessionManager.getEntries()) {
+  for (const rawEntry of source.sessionManager.getEntries()) {
     const entry = rawEntry as SessionEntryLike;
-    const usage =
-      entry.type === "message" &&
-      (entry.message?.role === "assistant" ||
-        entry.message?.role === "toolResult")
-        ? entry.message?.usage
-        : entry.type === "branch_summary" || entry.type === "compaction"
-          ? entry.usage
-          : undefined;
+    const usage = getEntryUsage(entry);
     if (!usage) continue;
 
     totals.input += getUsageNumber(usage.input);

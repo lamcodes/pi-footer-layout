@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import {
+  collectUsage,
   DEFAULT_CONFIG,
   footerConfigsEqual,
   layoutStatusLines,
@@ -200,4 +201,50 @@ test("footerConfigsEqual 只把完全等价的配置视为相同", () => {
     footerConfigsEqual(base, config({ continuationIndent: 4 })),
     false,
   );
+});
+
+test("collectUsage 计入独立 usage 条目，对齐 0.99.x 原生口径", () => {
+  const totals = collectUsage({
+    sessionManager: {
+      getEntries: () => [
+        // cache 预热等不参与 LLM 上下文的独立计量条目
+        {
+          type: "usage",
+          usage: {
+            input: 100,
+            output: 0,
+            cacheRead: 0,
+            cacheWrite: 50,
+            cost: { total: 0.01 },
+          },
+        },
+        {
+          type: "message",
+          message: {
+            role: "assistant",
+            usage: {
+              input: 200,
+              output: 10,
+              cacheRead: 300,
+              cacheWrite: 0,
+              cost: { total: 0.02 },
+            },
+          },
+        },
+        { type: "message", message: { role: "user" } },
+        {
+          type: "compaction",
+          usage: { input: 5, output: 0, cacheRead: 0, cacheWrite: 0, cost: { total: 0.001 } },
+        },
+      ],
+    },
+  });
+
+  assert.equal(totals.input, 305);
+  assert.equal(totals.output, 10);
+  assert.equal(totals.cacheRead, 300);
+  assert.equal(totals.cacheWrite, 50);
+  assert.ok(Math.abs(totals.cost - 0.031) < 1e-9);
+  // 缓存命中率只由 assistant 消息决定：300 / (200 + 300 + 0) = 60%
+  assert.equal(totals.latestCacheHitRate, 60);
 });
