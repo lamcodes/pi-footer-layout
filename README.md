@@ -27,13 +27,13 @@ pi install "D:\htmlcode\pi-footer-layout"
 本项目通过 GitHub 公开仓库分发，不需要 npm。用户可以固定 tag 安装：
 
 ```bash
-pi install git:github.com/lamcodes/pi-footer-layout@v0.2.0
+pi install git:github.com/lamcodes/pi-footer-layout@v0.2.1
 ```
 
 团队项目也可以使用项目级安装：
 
 ```bash
-pi install -l git:github.com/lamcodes/pi-footer-layout@v0.2.0
+pi install -l git:github.com/lamcodes/pi-footer-layout@v0.2.1
 ```
 
 这会写入项目的 `.pi/settings.json`，让 Pi 在项目启动时自动安装缺失的包。
@@ -140,7 +140,8 @@ pi install git:github.com/lamcodes/pi-footer-layout@v0.2.1
 - 是否启用 Footer 布局；
 - `each`、`wrap`、`group`、`compact` 模式；
 - 续行缩进；
-- 状态排序和状态分组。
+- 状态排序和状态分组；
+- 是否导入 Claude Code MCP（开启时立即同步一次，并持久化到 `claudeMcpImport.enabled`）。
 
 修改会立即应用，并写入全局 `~/.pi/agent/settings.json`。Pi 内置 `/settings` 没有公开扩展自定义设置项的注册接口，因此这里使用独立的 `/footer-layout` TUI 命令。
 
@@ -154,7 +155,7 @@ pi 0.99.x 起 MCP 已内置，配置在 `~/.pi/agent/mcp.json`。本扩展可以
 4. 新增的服务器写入 `mcp.json` 持久化并在当前会话立即注册生效，无需重启 Pi；移除的服务器下次启动 Pi 后断开；
 5. 不兼容条目（如 legacy SSE）跳过并在通知中说明原因。
 
-默认关闭。在 `~/.pi/agent/settings.json` 中开启：
+默认关闭。在 `~/.pi/agent/settings.json` 中开启（也可以直接在 `/footer-layout` 面板里切换，开启后立即同步一次）：
 
 ```json
 {

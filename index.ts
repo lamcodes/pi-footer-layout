@@ -116,6 +116,7 @@ export default (pi: ExtensionAPI) => {
       }
 
       let draft = layout.getConfig();
+      const claudeImportEnabled = await readClaudeMcpImportEnabled();
       persistResult = "ok";
       await ctx.ui.custom<void>((tui, theme, _keybindings, done) => {
         const items: SettingItem[] = [
@@ -140,6 +141,14 @@ export default (pi: ExtensionAPI) => {
             description: "超长状态换到下一行时，续行开头的空格数。",
             currentValue: String(draft.continuationIndent),
             values: Array.from({ length: 13 }, (_, index) => String(index)),
+          },
+          {
+            id: "claudeMcpImportEnabled",
+            label: "导入 Claude Code MCP",
+            description:
+              "开启后自动同步 Claude Code 用户级 MCP 到 pi，并在当前会话立即生效。",
+            currentValue: claudeImportEnabled ? "开启" : "关闭",
+            values: ["开启", "关闭"],
           },
           {
             id: "statusOrder",
@@ -173,6 +182,10 @@ export default (pi: ExtensionAPI) => {
         ];
 
         const updateConfig = (id: string, newValue: string): void => {
+          if (id === "claudeMcpImportEnabled") {
+            void toggleClaudeMcpImport(newValue === "开启", pi, ctx);
+            return;
+          }
           draft = updateDraftConfig(draft, id, newValue);
           layout.setConfig(draft);
           applyFooter(ctx);
@@ -226,23 +239,53 @@ export default (pi: ExtensionAPI) => {
   });
 };
 
+/** 读取 settings.json 中 claudeMcpImport.enabled；读取失败视为未开启。 */
+async function readClaudeMcpImportEnabled(): Promise<boolean> {
+  try {
+    const settingsPath = join(getAgentDir(), "settings.json");
+    const parsed = JSON.parse(await readSettingsFile(settingsPath)) as unknown;
+    return (
+      isRecord(parsed) &&
+      isRecord(parsed.claudeMcpImport) &&
+      parsed.claudeMcpImport.enabled === true
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** TUI 面板切换开关：写入 settings.json；开启时立即执行一次同步。 */
+async function toggleClaudeMcpImport(
+  enabled: boolean,
+  pi: ExtensionAPI,
+  ctx: ExtensionContext,
+): Promise<void> {
+  try {
+    const settingsPath = join(getAgentDir(), "settings.json");
+    const parsed = JSON.parse(await readSettingsFile(settingsPath)) as unknown;
+    if (!isRecord(parsed)) {
+      throw new Error("settings.json 顶层必须是 JSON 对象");
+    }
+    const claudeMcpImport = isRecord(parsed.claudeMcpImport)
+      ? parsed.claudeMcpImport
+      : {};
+    parsed.claudeMcpImport = { ...claudeMcpImport, enabled };
+    await mkdir(dirname(settingsPath), { recursive: true });
+    await writeFile(settingsPath, `${JSON.stringify(parsed, null, 2)}\n`, "utf8");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    ctx.ui.notify(`Claude MCP 导入开关保存失败: ${message}`, "error");
+    return;
+  }
+  if (enabled) await syncClaudeMcp(pi, ctx);
+}
+
 /** 按配置把 Claude Code 用户级 MCP 导入 pi 内置 mcp.json，并为本会话即时注册生效。 */
 async function syncClaudeMcp(
   pi: ExtensionAPI,
   ctx: ExtensionContext,
 ): Promise<void> {
-  let enabled = false;
-  try {
-    const settingsPath = join(getAgentDir(), "settings.json");
-    const parsed = JSON.parse(await readSettingsFile(settingsPath)) as unknown;
-    enabled =
-      isRecord(parsed) &&
-      isRecord(parsed.claudeMcpImport) &&
-      parsed.claudeMcpImport.enabled === true;
-  } catch {
-    // 配置读取失败视为未开启，不阻塞 Pi 启动。
-    return;
-  }
+  const enabled = await readClaudeMcpImportEnabled();
   if (!enabled) return;
 
   try {
