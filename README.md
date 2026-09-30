@@ -26,13 +26,13 @@ pi install "D:\htmlcode\pi-footer-layout"
 本项目通过 GitHub 公开仓库分发，不需要 npm。用户可以固定 tag 安装：
 
 ```bash
-pi install git:github.com/lamcodes/pi-footer-layout@v0.1.0
+pi install git:github.com/lamcodes/pi-footer-layout@v0.1.1
 ```
 
 团队项目也可以使用项目级安装：
 
 ```bash
-pi install -l git:github.com/lamcodes/pi-footer-layout@v0.1.0
+pi install -l git:github.com/lamcodes/pi-footer-layout@v0.1.1
 ```
 
 这会写入项目的 `.pi/settings.json`，让 Pi 在项目启动时自动安装缺失的包。
@@ -40,7 +40,7 @@ pi install -l git:github.com/lamcodes/pi-footer-layout@v0.1.0
 升级时安装新的 tag：
 
 ```bash
-pi install git:github.com/lamcodes/pi-footer-layout@v0.1.1
+pi install git:github.com/lamcodes/pi-footer-layout@v0.1.2
 ```
 
 安装后重启 Pi。扩展默认关闭，不会改变现有 Footer。
